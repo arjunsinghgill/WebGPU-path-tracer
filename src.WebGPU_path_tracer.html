@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGPU Path Tracer</title>
+<link href="/css/home" rel="stylesheet">
+</head>
+<body>
+<div id="app">
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div id="topbar-title">WebGPU PATH TRACER</div>
+  <div class="topbar-div"></div>
+  <div class="stat"><span class="stat-val accent" id="t-spp">0</span>SPP</div>
+  <div class="stat"><span class="stat-val green"  id="t-mrays">—</span>MRAYS/S</div>
+  <div class="stat"><span class="stat-val blue"   id="t-fps">—</span>ITER/S</div>
+  <div class="stat"><span class="stat-val"        id="t-time">0.0s</span>ELAPSED</div>
+  <div class="sep"></div>
+  <div class="stat"><span class="stat-val" id="t-noise">—</span>NOISE</div>
+</div>
+
+<!-- LEFT PANEL -->
+<div id="left-panel">
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Render</div>
+    <div class="panel-block-body">
+      <button class="pxbtn primary" id="btn-render" onclick="toggleRender()">▶  START RENDER</button>
+      <div class="ctrl-row">
+        <div class="ctrl-label">SAMPLES <span id="v-spp">512</span></div>
+        <input type="range" min="64" max="4096" step="64" value="512" oninput="P.maxSpp=+this.value; document.getElementById('v-spp').textContent=this.value; document.getElementById('ri-max').textContent=this.value;">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">MAX BOUNCES <span id="v-bounces">8</span></div>
+        <input type="range" min="1" max="16" step="1" value="8" oninput="P.bounces=+this.value; document.getElementById('v-bounces').textContent=this.value; reset();">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">CLAMP <span id="v-clamp">4.0</span></div>
+        <input type="range" min="0" max="20" step="0.5" value="4" oninput="P.clamp=+this.value; document.getElementById('v-clamp').textContent=(+this.value).toFixed(1); reset();">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Camera</div>
+    <div class="panel-block-body">
+      <div class="ctrl-row">
+        <div class="ctrl-label">FOV <span id="v-fov">55°</span></div>
+        <input type="range" min="20" max="100" step="1" value="55" oninput="P.fov=+this.value; document.getElementById('v-fov').textContent=this.value+'°'; reset();">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">FOCAL DIST <span id="v-focal">3.8</span></div>
+        <input type="range" min="0.5" max="12" step="0.1" value="3.8" oninput="P.focal=+this.value; document.getElementById('v-focal').textContent=(+this.value).toFixed(1); reset();">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">APERTURE <span id="v-aperture">0.00</span></div>
+        <input type="range" min="0" max="0.5" step="0.005" value="0" oninput="P.aperture=+this.value; document.getElementById('v-aperture').textContent=(+this.value).toFixed(3); reset();">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Environment</div>
+    <div class="panel-block-body">
+      <div class="btn-group">
+        <button class="pxbtn on" id="env-sky"     onclick="setEnv('sky')">Sky</button>
+        <button class="pxbtn"    id="env-sunset"  onclick="setEnv('sunset')">Sunset</button>
+        <button class="pxbtn"    id="env-studio"  onclick="setEnv('studio')">Studio</button>
+        <button class="pxbtn"    id="env-black"   onclick="setEnv('black')">Black</button>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">SKY INTENSITY <span id="v-skystr">1.0</span></div>
+        <input type="range" min="0" max="4" step="0.1" value="1" oninput="P.skyStr=+this.value; document.getElementById('v-skystr').textContent=(+this.value).toFixed(1); reset();">
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">SUN ELEVATION <span id="v-sunel">45°</span></div>
+        <input type="range" min="5" max="90" step="1" value="45" oninput="P.sunEl=+this.value; document.getElementById('v-sunel').textContent=this.value+'°'; reset();">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Film</div>
+    <div class="panel-block-body">
+      <div class="ctrl-row">
+        <div class="ctrl-label">EXPOSURE <span id="v-exposure">1.0</span></div>
+        <input type="range" min="0.1" max="5" step="0.05" value="1.0" oninput="P.exposure=+this.value; document.getElementById('v-exposure').textContent=(+this.value).toFixed(2); reset();">
+      </div>
+      <div class="btn-group cols3" style="margin-top:2px">
+        <button class="pxbtn on" id="tm-aces"     onclick="setToneMap('aces')">ACES</button>
+        <button class="pxbtn"    id="tm-filmic"   onclick="setToneMap('filmic')">Filmic</button>
+        <button class="pxbtn"    id="tm-none"     onclick="setToneMap('none')">Linear</button>
+      </div>
+      <div class="toggle-row">
+        <span>Gamma 2.2</span>
+        <label class="toggle"><input type="checkbox" checked onchange="P.gamma=this.checked; reset()"><div class="toggle-track"></div><div class="toggle-knob"></div></label>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- VIEWPORT -->
+<div id="viewport">
+  <canvas id="gpu-canvas"></canvas>
+  <div id="vp-badge">
+    LMB · Orbit&nbsp; &nbsp;Scroll · Zoom&nbsp; &nbsp;RMB · Pan
+  </div>
+  <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+  <div id="no-webgpu">
+    <h2>WebGPU Required</h2>
+    <p>USE CHROME 113+ OR EDGE 113+</p>
+    <code>chrome://flags → Unsafe WebGPU → Enabled</code>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div id="right-panel">
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Scene</div>
+    <div class="panel-block-body" style="padding:6px">
+      <div class="obj-list" id="obj-list"></div>
+    </div>
+  </div>
+
+  <div class="panel-block" id="mat-block">
+    <div class="panel-block-hdr">Material</div>
+    <div class="panel-block-body">
+      <div id="mat-preview" style="height:32px;border:1px solid var(--border);margin-bottom:2px;"></div>
+      <div class="btn-group">
+        <button class="pxbtn on" id="mt-diffuse"    onclick="setMatType(0)">Diffuse</button>
+        <button class="pxbtn"    id="mt-metal"      onclick="setMatType(1)">Metal</button>
+        <button class="pxbtn"    id="mt-glass"      onclick="setMatType(2)">Glass</button>
+        <button class="pxbtn"    id="mt-emit"       onclick="setMatType(3)">Emit</button>
+      </div>
+      <div class="color-row">
+        <input type="color" id="mat-color" value="#cccccc" oninput="setMatColor(this.value)">
+        <span>Base Color</span>
+      </div>
+      <div class="ctrl-row" id="row-rough">
+        <div class="ctrl-label">ROUGHNESS <span id="v-rough">0.5</span></div>
+        <input id="sl-rough" type="range" min="0" max="1" step="0.01" value="0.5" oninput="setMatVal('rough',+this.value,'v-rough',2)">
+      </div>
+      <div class="ctrl-row" id="row-ior" style="display:none">
+        <div class="ctrl-label">IOR <span id="v-ior">1.5</span></div>
+        <input id="sl-ior" type="range" min="1.0" max="3.0" step="0.01" value="1.5" oninput="setMatVal('ior',+this.value,'v-ior',2)">
+      </div>
+      <div class="ctrl-row" id="row-emit" style="display:none">
+        <div class="ctrl-label">STRENGTH <span id="v-emit">8.0</span></div>
+        <input id="sl-emit" type="range" min="0" max="40" step="0.5" value="8" oninput="setMatVal('emit',+this.value,'v-emit',1)">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Progress</div>
+    <div class="panel-block-body">
+      <div class="progress-info">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 52 52"><circle id="ring-track" cx="26" cy="26" r="22"/><circle id="ring-prog" cx="26" cy="26" r="22"/></svg>
+          <div class="ring-label"><span id="ring-pct">0%</span><small>DONE</small></div>
+        </div>
+        <div class="progress-stats">
+          <div class="progress-stat">SAMPLE <span id="ri-cur">0</span> / <span id="ri-max">512</span></div>
+          <div class="progress-stat">ETA <span id="p-eta">—</span></div>
+          <div class="progress-stat">ELAPSED <span id="p-elapsed">0.0s</span></div>
+          <div class="progress-stat">SPP/S <span id="p-spps">—</span></div>
+        </div>
+      </div>
+      <div id="noise-chart">
+        <canvas id="noise-canvas"></canvas>
+        <div class="chart-label">VARIANCE ESTIMATE</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-block">
+    <div class="panel-block-hdr">Debug Pass</div>
+    <div class="panel-block-body">
+      <div class="pass-grid">
+        <button class="pxbtn on" id="pass-beauty"   onclick="setPass(0)">Beauty</button>
+        <button class="pxbtn"    id="pass-albedo"   onclick="setPass(1)">Albedo</button>
+        <button class="pxbtn"    id="pass-normal"   onclick="setPass(2)">Normal</button>
+        <button class="pxbtn"    id="pass-depth"    onclick="setPass(3)">Depth</button>
+        <button class="pxbtn"    id="pass-shadow"   onclick="setPass(4)">Shadow</button>
+        <button class="pxbtn"    id="pass-emission" onclick="setPass(5)">Emission</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- STATUSBAR -->
+<div id="statusbar">
+  <b id="sb-scene">Cornell Box</b>
+  <span id="sb-res">—×—</span>
+  <span>TRIS <b id="sb-tris">—</b></span>
+  <span>SPHERES <b id="sb-spheres">—</b></span>
+  <div style="flex:1"></div>
+  <b id="sb-status">IDLE</b>
+</div>
+
+</div><!-- #app -->
+
+<script src="/js/home" ></script>
+</body>
+</html>
+
+
